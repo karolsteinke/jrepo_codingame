@@ -1,12 +1,12 @@
 package sk;
 
 import java.util.*;
-import java.io.*;
 
 //idea: use try with resources for Scanner.in
 //idea: use try-catch once for whole switch?
-//problem: exception wont stop excecution
-//idea: isSyntaxValid and distanceToClosingBrackets do the same, so reduce!
+// "SYNTAX ERROR" if a [ appears to have no ] to jump to, or vice versa. Note that this error must be raised before the execution of the program, no matter its position in the Brainfuck code.
+// "POINTER OUT OF BOUNDS" if the pointer position goes below 0 or above S - 1.
+// "INCORRECT VALUE" if after an operation the value of a cell becomes negative or higher than 255.
 
 class Solution {
 
@@ -26,155 +26,154 @@ class Solution {
 
         ArrayList<Character> instructions = new ArrayList<>();
         ArrayList<Integer> numbers = new ArrayList<>();
-        char[] memory = new char[S]; 
+        RestrictedInt[] memory = new RestrictedInt[S];
         String answer = "";
+        for (int i=0; i<memory.length; i++) {
+            memory[i] = new RestrictedInt(0, 0, 255);
+        }
         
-        // input: instructions lines (L lines) - add to instructions ArrayList
+        // input: instructions, add to 'instructions' ArrayList (L lines)
         for (int i = 0; i < L; i++) {
             String input = in.nextLine();
+            //ignore everything but instructions
             String replace = input.replaceAll("[^+\\-,.<>\\[\\]]", "");
             for (char c : replace.toCharArray()) {
                 instructions.add(c);
             }
         }        
 
-        // input: integer input lines (N lines) - add to numbers ArrayList
+        // input: integers, add to 'numbers' ArrayList (N lines)
         for (int i = 0; i < N; i++) {
             String input = in.nextLine();
             String[] split = input.split(" ");
             for (String n : split) {
+                //ignore everything but integers
                 try { 
                     int val = Integer.parseInt(n);
                     numbers.add(val);
                 } catch (NumberFormatException e) { 
-                    System.err.println("The string is not an integer, string: " + n); 
+                    System.err.println("The string is not an integer and will be ignored, string: " + n); 
                 } 
             }
         }
 
         in.close();
 
-
         // ***** Syntax check *****
 
         //inner class
         class SyntaxChecker {
             
-            int idx = 0;
+            int i = 0;
+            int bracketsDepth = 0;
 
             public boolean isSyntaxValid() {
-                
-                while (true) {
+                while (i < instructions.size()) {
+                    char ins = instructions.get(i);
                     
-                    char instruction = instructions.get(this.idx);
-                    
-                    //instruction is ']'
-                    if (instruction == ']') {
-                        return false;
+                    if (ins == '[') {
+                        i++;
+                        bracketsDepth++;
+                        boolean isSyntaxValid = isSyntaxValid();
+                        if (!isSyntaxValid) return isSyntaxValid;
                     }
-                    //instruction is '['
-                    else if (instruction == '[') {
-                        int distanceToClosingBracket = distanceToClosingBracket(this.idx);
-                        if (distanceToClosingBracket == -1) return false;
-                        else this.idx += distanceToClosingBracket;
+                    else if (ins == ']') {
+                        if (bracketsDepth > 0) {
+                            i++;
+                            bracketsDepth--;
+                            return true;
+                        }
+                        else {
+                            return false;
+                        }
                     }
-                    //instruction is something else
                     else {
-                        this.idx++;
+                        i++;
                     }
-                    
-                    //end of instructions arraylist
-                    if (this.idx >= instructions.size()) break;
                 }
-                return true;
+                return (bracketsDepth == 0);
             }
 
-            private int distanceToClosingBracket(int from) {
-                
-                int distance = 1;
-                int newIdx = from + distance;
-                
-                while(true) {
-                    
-                    char instruction = instructions.get(newIdx);
-
-                    //instruction is ']'
-                    if (instruction == ']') {
-                        return distance;
-                    }
-                    //instruction is '['
-                    else if (instruction == '[') {
-                        int distanceToClosingBracket = distanceToClosingBracket(newIdx);
-                        if (distanceToClosingBracket == -1) return -1;
-                        else distance += distanceToClosingBracket;
-                    }
-                    //instruction is something else
-                    else {
-                        distance++;
-                    }
-                    
-                    //end of instructions arraylist
-                    if (newIdx >= instructions.size()) return -1;
-                }
-            }
         }
 
         SyntaxChecker checker = new SyntaxChecker();
         if (!checker.isSyntaxValid()) {
             System.out.println("SYNTAX ERROR");
+            return;
         }
 
         // ***** Program interpretation *****
         
         Iterator<Integer> numIter = numbers.iterator();
         ListIterator<Character> insIter = instructions.listIterator();
-        RestrictedInt memoIdx = new RestrictedInt(0, 0, S);
+        RestrictedInt j = new RestrictedInt(0, 0, S-1);
 
         while (insIter.hasNext()) {
             
             char ins = insIter.next();
+            //System.err.println(ins + " j=" + j.getValue() + ", memory[j]=" + memory[j.getValue()].getValue());
             
             switch(ins) {
                 case '>':
                     //increment the pointer position
                     try {
-                        memoIdx.setValue(memoIdx.getValue() + 1);
+                        j.increment();
                     }
-                    catch (PointerOutOfBounds e) {
+                    catch (IllegalArgumentException e) {
                         System.out.println("POINTER OUT OF BOUNDS");
+                        return;
                     }
                     break;
                 case '<':
                     //decrement the pointer position
                     try {
-                        memoIdx.setValue(memoIdx.getValue() - 1);
+                        j.decrement();
                     }
-                    catch (PointerOutOfBounds e) {
+                    catch (IllegalArgumentException e) {
                         System.out.println("POINTER OUT OF BOUNDS");
+                        return;
                     }
                     break;
                 case '+':
                     //increment the value of the cell the pointer is pointing to
-                    memory[memoIdx.getValue()]++;
+                    try {
+                        memory[j.getValue()].increment();
+                    }
+                    catch (IllegalArgumentException e) {
+                        System.out.println("INCORRECT VALUE");
+                        return;
+                    }
                     break;
                 case '-':
                     //decrement the value of the cell the pointer is pointing to
-                    memory[memoIdx.getValue()]--;
+                    try {
+                        memory[j.getValue()].decrement();
+                    }
+                    catch (IllegalArgumentException e) {
+                        System.out.println("INCORRECT VALUE");
+                        return;
+                    }
                     break;
                 case '.':
                     //output the value of the pointed cell, interpreting it as an ASCII value
-                    answer += memory[memoIdx.getValue()];
+                    answer += (char) memory[j.getValue()].getValue();
                     break;
                 case ',':
                     //accept a positive one byte integer as input and store it in the pointed cell
                     if (numIter.hasNext()) {
-                        int a = numIter.next();
-                        memory[memoIdx.getValue()] = (char) a;
+                        try {
+                            int a = numIter.next();
+                            memory[j.getValue()] = new RestrictedInt(a, 0, 255);
+                        }
+                        catch (IllegalArgumentException e) {
+                            System.out.println("INCORRECT VALUE");
+                            return;
+                        }
                     }
                     break;
                 case '[':
                     //jump to the instruction after the corresponding ] if the pointed cell's value is 0
-                    if (memory[memoIdx.getValue()] == 0) {
+                    if (memory[j.getValue()].getValue() == 0) {
                         int corresponding = 1;
                         while (corresponding != 0) {
                             ins = insIter.next();
@@ -185,8 +184,9 @@ class Solution {
                     break;
                 case ']':
                     //go back to the instruction after the corresponding [ if the pointed cell's value is different from 0
-                    if (memory[memoIdx.getValue()] != 0) {
+                    if (memory[j.getValue()].getValue() != 0) {
                         int corresponding = -1;
+                        insIter.previous();
                         while (corresponding != 0) {
                             ins = insIter.previous();
                             if (ins == ']') corresponding--;
@@ -194,52 +194,41 @@ class Solution {
                         }
                     }
                     break;
-                default:
-                    //different instruction
             }
         }
-
 
         // ***** Printing answer *****
 
         // Write an answer using System.out.println()
         // To debug: System.err.println("Debug messages...");
 
-        /*
-        char x = 'a';
-        answer += x;
-        x++;
-        answer += x;
-        */
-
         System.out.println(answer);
     }
 }
 
-class PointerOutOfBounds extends RuntimeException {
-    public PointerOutOfBounds() {}
-    public PointerOutOfBounds(String message) {
-        super(message);
-    }
-}
-
 class RestrictedInt {
-    private int value;
+    private int val;
     private int min;
     private int max;
 
-    public RestrictedInt(int value, int min, int max) {
-        this.value = value;
+    public RestrictedInt(int val, int min, int max) {
+        this.val = val;
         this.min = min;
         this.max = max;
     }
-    public void setValue(int value) {
-        if (value > this.max || value < this.min) {
-            throw new PointerOutOfBounds();
-        }
-        this.value = value;
-    }
     public int getValue() {
-        return this.value;
+        return this.val;
     }
+    public void setValue(int val) {
+        if (val > this.max || val < this.min) {
+            throw new IllegalArgumentException();
+        }
+        this.val = val;
+    }
+    public void increment() {
+        setValue(this.val + 1);
+    }
+    public void decrement() {
+        setValue(this.val - 1);
+    }   
 }
