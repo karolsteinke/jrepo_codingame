@@ -1,18 +1,27 @@
 package sk;
 
 import java.util.*;
-import java.io.*;
-import java.math.*;
 import java.nio.file.Paths;
 
 public class Player {
 
     public static void main(String[] args) {
+        
         //try (Scanner in = new Scanner(System.in)) {
         try (Scanner in = new Scanner(Paths.get("zombie_input.txt"))) {
             
+            Zombie target = null;
+            
             // game loop
             while (true) {
+                int xNext = 0;
+                int yNext = 0;
+                Set<Zombie> zombies = new HashSet<>();
+                Set<Human> humans = new HashSet<>();
+                Map<Zombie, Integer> distToHuman = new HashMap<>(); //zombie (key) to distance to closest human
+                Map<Zombie, Integer> distToZombie = new HashMap<>(); //zombie (key) to distance to ash
+
+                
                 int x = in.nextInt(); //character pos
                 int y = in.nextInt(); //character pos
                 int humanCount = in.nextInt();
@@ -20,6 +29,7 @@ public class Player {
                     int humanId = in.nextInt();
                     int humanX = in.nextInt();
                     int humanY = in.nextInt();
+                    humans.add(new Human(humanId, humanX, humanY));
                 }
                 int zombieCount = in.nextInt();
                 for (int i = 0; i < zombieCount; i++) {
@@ -28,14 +38,58 @@ public class Player {
                     int zombieY = in.nextInt();
                     int zombieXNext = in.nextInt();
                     int zombieYNext = in.nextInt();
+                    zombies.add(new Zombie(zombieId, zombieX, zombieY, zombieXNext, zombieYNext));
                 }
 
                 // Write an action using System.out.println()
                 // To debug: System.err.println("Debug messages...");
 
-                System.out.println("0 0"); // Your destination coordinates
+                //fill the 'distToHuman' dictionary
+                for (Zombie z : zombies) {
+                    int min = Integer.MAX_VALUE;
+                    for (Human h : humans) {
+                        double dist = Math.hypot(z.x() - h.x(), z.y() - h.y());
+                        if (dist < min) {
+                            min = (int) dist;
+                            distToHuman.put(z, min);
+                        }
+                    }
+                }
 
-                //DEBUG, check for end of test input
+                //fill the 'distToZombie' dictionary
+                for (Zombie z : zombies) {
+                    double dist = Math.hypot(z.x() - x,  z.y() - y);
+                    distToZombie.put(z, (int) dist);
+                }
+
+                //target case 1: target alive, update its data
+                if (zombies.contains(target)) {
+                    for (Zombie z : zombies) {
+                        if (z.equals(target)) target = z;
+                    }
+                }
+                //target case 2: target not set or was killed, set new one
+                else {
+                    int min = Integer.MAX_VALUE;
+                    for (Zombie z : zombies) {
+                        int turnsToHuman = (int) Math.ceil((distToHuman.get(z) - 400) / 400.0);
+                        int turnsToZombie = (int) Math.ceil((distToZombie.get(z) - 2000) / 1000.0);
+                        int turnsDelta = turnsToHuman - turnsToZombie;
+                        if (turnsDelta < min) {
+                            min = turnsDelta;
+                            target = z;
+                        }
+                    }
+                }
+
+                //where should ash go
+                xNext = target.x();
+                yNext = target.y();
+
+                //OUTPUT RESULT
+                System.out.println(xNext + " " + yNext); // Your destination coordinates
+
+                //DEBUG
                 if (x == -1) break;
             }
             //end of game loop
@@ -57,7 +111,8 @@ class Human {
         this.y = y;
     }
 
-    public int[] pos() {return new int[] {this.x, this.y};}
+    public int x() {return this.x;}
+    public int y() {return this.y;}
     public int id() {return this.id;}
 }
 
@@ -71,6 +126,19 @@ class Zombie extends Human {
         this.yNext = yNext;
     }
 
-    public int[] posNext() {return new int[] {this.xNext, this.yNext};}
-}
+    public int xNext() {return this.xNext;}
+    public int yNext() {return this.yNext;}
 
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        if (!(other instanceof Zombie)) return false;
+        Zombie otherZombie = (Zombie) other;
+        return otherZombie.id() == this.id();
+    }
+
+    @Override
+    public int hashCode() {
+        return this.id();
+    }
+}
